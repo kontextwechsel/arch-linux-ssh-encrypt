@@ -1,0 +1,119 @@
+#!/bin/bash
+
+build() {
+  map add_module "dm_crypt" "cbc" "xts"
+  add_checked_modules "/drivers/net/"
+
+  map add_udev_rule "10-dm.rules" "13-dm-disk.rules" "95-dm-notify.rules"
+  add_udev_rule "/usr/lib/initcpio/udev/11-dm-initramfs.rules"
+
+  add_binary "/usr/bin/cryptsetup"
+  add_binary "/usr/bin/dhclient"
+  add_binary "/usr/bin/dropbear"
+  add_binary "/usr/bin/ip"
+
+  add_dir "/etc/dropbear/"
+  add_dir "/home/unlock/.ssh/"
+  add_dir "/run/"
+  add_dir "/var/log/"
+
+  local temp
+  temp="$(mktemp -d -p "${BUILDROOT}/../" ssh-encrypt.XXX)"
+
+  printf "%s\n" "/usr/bin/ash" > "${temp}/shells"
+  add_file "${temp}/shells" "/etc/shells"
+
+  printf "%s\n" "unlock:x:0:0::/home/unlock:/usr/bin/ash" > "${temp}/passwd"
+  add_file "${temp}/passwd" "/etc/passwd"
+
+  local keytype keyfile
+  for keytype in rsa ecdsa ed25519; do
+    keyfile="/etc/ssh/ssh_host_${keytype}_key"
+    if [[ -s "${keyfile}" ]]; then
+      if dropbearconvert openssh dropbear "${keyfile}" "${temp}/dropbear_${keytype}_host_key" 2> /dev/null; then
+        add_file "${temp}/dropbear_${keytype}_host_key" "/etc/dropbear/dropbear_${keytype}_host_key"
+      else
+        error "Host key generation failed"
+      fi
+    fi
+  done
+  if [[ -s /etc/dropbear/authorized_keys ]]; then
+    add_file "/etc/dropbear/authorized_keys" "/home/unlock/.ssh/authorized_keys"
+  else
+    warning "No authorized keys"
+  fi
+
+  cat <<- EOF > "${temp}/dhclient-script"
+		#!/usr/bin/ash
+
+		case "\${reason}" in
+		  PREINIT)
+		    ip link set dev "\${interface}" up
+		    ;;
+		  BOUND)
+		    ip addr add "\${new_ip_address}/\${new_subnet_mask}" dev "\${interface}"
+		    printf "%s: %s\n" "Address" "\${new_ip_address}" "Subnet" "\${new_subnet_mask}"
+		    for new_router in \${new_routers}; do
+		      ip route add default via "\${new_router}" dev "\${interface}"
+		      printf "%s: %s\n\n" "Gateway" "\${new_router}"
+		      break
+		    done
+		    ;;
+		esac
+	EOF
+  chmod +x "${temp}/dhclient-script"
+  add_binary "${temp}/dhclient-script" "/usr/bin/dhclient-script"
+
+  cat <<- EOF > "${temp}/unlock"
+		#!/usr/bin/ash
+
+		. /run/cryptdevice
+		IFS=":"
+		set -- \${cryptdevice}
+		device="\$1" name="\$2" options="\$3"
+		IFS=","
+		set -- \${options}
+		unset IFS
+
+		if cryptsetup \$(printf -- " --%s" "\$@") open "\${device}" "\${name}"; then
+		  if [ ! -z "\${SSH_CLIENT+substitution}" ]; then
+		    killall cryptsetup
+		  fi
+		fi
+	EOF
+  chmod +x "${temp}/unlock"
+  add_binary "${temp}/unlock" "/usr/bin/unlock"
+
+  add_runscript
+}
+
+help() {
+  cat <<- EOF
+		Enable remote unlock of an encrypted root device via SSH
+
+		Usage:
+
+		ssh unlock@<host>
+
+		Installation:
+
+		1. Copy authorized SSH keys to /etc/dropbear/authorized_keys
+		2. Replace hook 'encrypt' with 'ssh-encrypt' in /etc/mkinitcpio.conf
+		3. Add required kernel parameters
+		4. Rebuild initramfs
+
+		Device configuration kernel parameter:
+
+		cryptdevice=<device>:<name>[:<options>]
+
+		cryptdevice=/dev/disk/by-label/label:example
+		cryptdevice=UUID=62fce35d-8941-490a-9fd3-9c21c946bce5:ab3aa190-3534-4a05-8fc5-09c53cdd4c87:allow-discards,debug
+
+		Network configuration kernel parameter:
+
+		ip=<address>::<gateway>:<subnet>::<interface>:<method>
+
+		ip=::::::dhcp
+		ip=172.16.0.2::172.16.0.1:255.255.255.0:::off
+	EOF
+}

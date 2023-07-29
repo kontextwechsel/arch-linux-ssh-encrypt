@@ -1,0 +1,53 @@
+#!/usr/bin/ash
+
+run_hook () {
+  if [ -n "${ip}" ]; then
+    IFS=":"
+    set -- ${ip}
+    address="$1" gateway="$3" subnet="$4" interface="$6" method="$7"
+    if [ -z "${interface}" ]; then
+      interface="eth0"
+    fi
+    unset IFS
+
+    if [ -h "/sys/class/net/${interface}" ]; then
+      if [ "${method}" = "dhcp" ]; then
+        if dhclient -1 -lf /run/dhclient.leases "${interface}"; then
+          killall dhclient
+        else
+          printf "Failed to request address via DHCP\n\n"
+        fi
+      else
+          ip link set dev "${interface}" up
+          ip addr add "${address}/${subnet}" dev "${interface}"
+          printf "%s: %s\n" "Address" "${address}" "Subnet" "${subnet}"
+          ip route add default via "${gateway}" dev "${interface}"
+          printf "%s: %s\n\n" "Gateway" "${gateway}"
+      fi
+    else
+      printf "Network device unavailable\n\n"
+    fi
+  else
+    printf "Network configuration unavailable\n\n"
+  fi
+
+  if [ -n "${cryptdevice}" ]; then
+    mkdir -p /dev/pts/
+    mount -t devpts devpts /dev/pts/
+    touch /var/log/lastlog
+    touch /run/utmp
+
+    printf "%s=%s\n" "cryptdevice" "${cryptdevice}" > /run/cryptdevice
+    if dropbear -E -s -j -k $(printf -- " -r %s" $(ls /etc/dropbear/*_host_key)) -c unlock 2> /dev/null; then
+      printf "%s\n\n" "SSH server is running..."
+    else
+      printf "%s\n\n" "Failed to start SSH server"
+    fi
+
+    unlock
+
+    killall dropbear
+  else
+    printf "Device configuration unavailable\n"
+  fi
+}
