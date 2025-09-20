@@ -28,13 +28,16 @@ build() {
 
   local keytype keyfile
   for keytype in rsa ecdsa ed25519; do
-    keyfile="/etc/ssh/ssh_host_${keytype}_key"
-    if [[ -s "${keyfile}" ]]; then
-      if dropbearconvert openssh dropbear "${keyfile}" "${temp}/dropbear_${keytype}_host_key" 2> /dev/null; then
-        add_file "${temp}/dropbear_${keytype}_host_key" "/etc/dropbear/dropbear_${keytype}_host_key"
-      else
-        error "Host key generation failed"
+    keyfile="/etc/dropbear/ssh_host_${keytype}_key"
+    if [[ ! -f "${keyfile}" ]]; then
+      if ! ssh-keygen -t "${keytype}" -C "unlock@$(hostnamectl --static)" -N "" -f "${keyfile}"; then
+        error "OpenSSH host key generation failed"
       fi
+    fi
+    if dropbearconvert openssh dropbear "${keyfile}" "${temp}/dropbear_${keytype}_host_key" 2> /dev/null; then
+      add_file "${temp}/dropbear_${keytype}_host_key" "/etc/dropbear/dropbear_${keytype}_host_key"
+    else
+      error "Dropbear host key generation failed"
     fi
   done
   if [[ -s /etc/dropbear/authorized_keys ]]; then
