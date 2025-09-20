@@ -1,7 +1,7 @@
 #!/bin/bash
 
 build() {
-  map add_module "dm_crypt" "cbc" "xts"
+  map add_module "8021q" "dm_crypt" "cbc" "xts"
   add_checked_modules "/drivers/net/"
 
   map add_udev_rule "10-dm.rules" "13-dm-disk.rules" "95-dm-notify.rules"
@@ -58,9 +58,10 @@ build() {
 		    printf "%s: %s\n" "Address" "\${new_ip_address}" "Subnet" "\${new_subnet_mask}"
 		    for new_router in \${new_routers}; do
 		      ip route add default via "\${new_router}" dev "\${interface}"
-		      printf "%s: %s\n\n" "Gateway" "\${new_router}"
+		      printf "%s: %s\n" "Gateway" "\${new_router}"
 		      break
 		    done
+		    printf "\n"
 		    ;;
 		esac
 	EOF

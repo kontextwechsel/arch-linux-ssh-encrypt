@@ -1,5 +1,5 @@
 pkgname=mkinitcpio-ssh-encrypt
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="Enable remote unlock of an encrypted root device via SSH"
 arch=("any")
@@ -10,8 +10,8 @@ source=(
   "install"
 )
 sha256sums=(
-  "287c3ad612cfa25d71f431aae8f9bb54ef6825c0708121557018bc11fd2b1d91"
-  "2544d85570e20324e4a394201cc880a898a00311d480c75c147724ff6787d157"
+  "f743f1936f25d3a789cc1e2be96dab37239a83b7348f6e1e66348551944cac80"
+  "a57e476cc36190b1b974c24c9044bd835fda6043320df8e9cf45a55e5b26b8af"
 )
 
 package() {
