@@ -5,7 +5,6 @@ build() {
   add_checked_modules "/drivers/net/"
 
   map add_udev_rule "10-dm.rules" "13-dm-disk.rules" "95-dm-notify.rules"
-  add_udev_rule "/usr/lib/initcpio/udev/11-dm-initramfs.rules"
 
   add_binary "/usr/bin/cryptsetup"
   add_binary "/usr/bin/dhclient"
